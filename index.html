@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vírgula pitagórica</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: #fbffd7;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  button.play {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #b8552e;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background 0.15s ease, transform 0.1s ease;
+    padding: 0;
+  }
+  button.play:hover { background: #a24a27; }
+  button.play:active { transform: scale(0.94); }
+  button.play:focus-visible { outline: 2px solid #1a2028; outline-offset: 3px; }
+  button.play.playing { background: #6b6459; }
+
+  .triangle {
+    width: 0;
+    height: 0;
+    border-top: 12px solid transparent;
+    border-bottom: 12px solid transparent;
+    border-left: 20px solid #fff;
+    margin-left: 6px;
+  }
+
+  .bars {
+    display: none;
+    gap: 5px;
+  }
+  .bars span {
+    width: 6px;
+    height: 22px;
+    background: #fff;
+    border-radius: 1px;
+  }
+  button.play.playing .triangle { display: none; }
+  button.play.playing .bars { display: flex; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <button class="play" id="play" aria-label="Tocar">
+    <div class="triangle"></div>
+    <div class="bars"><span></span><span></span></div>
+  </button>
+</div>
+
+<script>
+(() => {
+  const F0 = 220;
+  const F1 = F0 * Math.pow(3/2, 12) / Math.pow(2, 7); // ≈223 Hz
+  const DURATION = 4.5;
+
+  let actx = null;
+  let playing = false;
+  const btn = document.getElementById('play');
+
+  btn.addEventListener('click', () => {
+    if (playing) return;
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+
+    playing = true;
+    btn.classList.add('playing');
+
+    const now = actx.currentTime;
+    const gain = actx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + 0.08);
+    gain.gain.setValueAtTime(0.22, now + DURATION - 0.4);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + DURATION);
+    gain.connect(actx.destination);
+
+    const osc1 = actx.createOscillator();
+    const osc2 = actx.createOscillator();
+    osc1.type = 'sine';
+    osc2.type = 'sine';
+    osc1.frequency.setValueAtTime(F0, now);
+    osc2.frequency.setValueAtTime(F1, now);
+    osc1.connect(gain);
+    osc2.connect(gain);
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + DURATION);
+    osc2.stop(now + DURATION);
+
+    setTimeout(() => {
+      playing = false;
+      btn.classList.remove('playing');
+    }, DURATION * 1000);
+  });
+})();
+</script>
+</body>
+</html>
