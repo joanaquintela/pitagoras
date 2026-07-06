@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vírgula pitagórica</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: #fbffd7;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  button.play {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: #b8552e;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background 0.15s ease, transform 0.1s ease;
+    padding: 0;
+  }
+  button.play:hover { background: #a24a27; }
+  button.play:active { transform: scale(0.94); }
+  button.play:focus-visible { outline: 2px solid #1a2028; outline-offset: 3px; }
+  button.play.playing { background: #6b6459; }
+
+  .triangle {
+    width: 0;
+    height: 0;
+    border-top: 12px solid transparent;
+    border-bottom: 12px solid transparent;
+    border-left: 20px solid #fff;
+    margin-left: 6px;
+  }
+
+  .bars {
+    display: none;
+    gap: 5px;
+  }
+  .bars span {
+    width: 6px;
+    height: 22px;
+    background: #fff;
+    border-radius: 1px;
+  }
+  button.play.playing .triangle { display: none; }
+  button.play.playing .bars { display: flex; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <button class="play" id="play" aria-label="Tocar">
+    <div class="triangle"></div>
+    <div class="bars"><span></span><span></span></div>
+  </button>
+</div>
+
+<script>
+(() => {
+  const F0 = 220;
+  const F1 = F0 * Math.pow(3/2, 12) / Math.pow(2, 7); // vírgula pitagórica — ≈223.00 Hz
+
+  const NOTE_DUR = 1.3;   // duração de cada nota isolada
+  const GAP = 0.35;       // silêncio entre secções
+  const CHORD_DUR = 3.0;  // duração das duas notas em simultâneo
+
+  const t1 = 0;
+  const t2 = NOTE_DUR + GAP;
+  const t3 = t2 + NOTE_DUR + GAP;
+  const TOTAL = t3 + CHORD_DUR;
+
+  let actx = null;
+  let playing = false;
+  const btn = document.getElementById('play');
+
+  // Síntese aditiva simples, tipo piano: alguns harmónicos com decaimento
+  // rápido e naturalidade percussiva, passados por um filtro passa-baixo.
+  function playNote(freq, when, dur, dest) {
+    const harmonics = [
+      { mult: 1,   amp: 1.00 },
+      { mult: 2,   amp: 0.55 },
+      { mult: 3,   amp: 0.30 },
+      { mult: 4,   amp: 0.16 },
+      { mult: 5,   amp: 0.09 },
+    ];
+
+    const noteGain = actx.createGain();
+    noteGain.gain.setValueAtTime(0.0001, when);
+    noteGain.gain.exponentialRampToValueAtTime(0.9, when + 0.008);
+    noteGain.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+
+    const filter = actx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 3200;
+    filter.Q.value = 0.7;
+
+    noteGain.connect(filter);
+    filter.connect(dest);
+
+    harmonics.forEach(h => {
+      const osc = actx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * h.mult, when);
+      const partialGain = actx.createGain();
+      partialGain.gain.value = h.amp;
+      osc.connect(partialGain);
+      partialGain.connect(noteGain);
+      osc.start(when);
+      osc.stop(when + dur + 0.05);
+    });
+  }
+
+  btn.addEventListener('click', () => {
+    if (playing) return;
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+
+    playing = true;
+    btn.classList.add('playing');
+
+    const now = actx.currentTime;
+    const master = actx.createGain();
+    master.gain.value = 0.5;
+    master.connect(actx.destination);
+
+    // nota 1 sozinha
+    playNote(F0, now + t1, NOTE_DUR, master);
+    // nota 2 sozinha
+    playNote(F1, now + t2, NOTE_DUR, master);
+    // as duas juntas
+    playNote(F0, now + t3, CHORD_DUR, master);
+    playNote(F1, now + t3, CHORD_DUR, master);
+
+    setTimeout(() => {
+      playing = false;
+      btn.classList.remove('playing');
+    }, TOTAL * 1000);
+  });
+})();
+</script>
+</body>
+</html>
